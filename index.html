@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>5分日次レビュー・テンプレートジェネレータ</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  *:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }
+  .fade-in { animation: fadeIn 0.3s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 0.75rem; margin: 2px; }
+</style>
+</head>
+<body class="bg-gray-50 min-h-screen text-gray-800">
+
+<div class="max-w-3xl mx-auto px-4 py-8">
+  <header class="mb-8 text-center">
+    <h1 class="text-2xl font-bold text-indigo-700">5分日次レビュー</h1>
+    <p class="text-sm text-gray-500 mt-1">毎日の振り返りを記録し、パターンを発見する</p>
+  </header>
+
+  <!-- タブ -->
+  <div class="flex gap-1 mb-6 bg-gray-200 rounded-xl p-1" role="tablist">
+    <button id="tab-today" role="tab" aria-selected="true" onclick="switchTab('today')"
+      class="flex-1 py-2 rounded-lg text-sm font-medium transition bg-white text-indigo-700 shadow">今日の振り返り</button>
+    <button id="tab-history" role="tab" aria-selected="false" onclick="switchTab('history')"
+      class="flex-1 py-2 rounded-lg text-sm font-medium transition text-gray-600">過去の記録</button>
+    <button id="tab-pattern" role="tab" aria-selected="false" onclick="switchTab('pattern')"
+      class="flex-1 py-2 rounded-lg text-sm font-medium transition text-gray-600">パターン分析</button>
+  </div>
+
+  <!-- 今日の振り返りフォーム -->
+  <div id="pane-today" class="fade-in">
+    <div class="bg-white rounded-2xl shadow-sm p-6 space-y-5">
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="font-semibold text-gray-700">今日のレビュー</h2>
+        <span id="today-label" class="text-sm text-indigo-600 font-mono"></span>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-600 mb-2">🏆 今日のWin（3つ）</label>
+        <div class="space-y-2">
+          <input id="win1" type="text" placeholder="Win 1" aria-label="Win 1"
+            class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-indigo-400 outline-none transition">
+          <input id="win2" type="text" placeholder="Win 2" aria-label="Win 2"
+            class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-indigo-400 outline-none transition">
+          <input id="win3" type="text" placeholder="Win 3" aria-label="Win 3"
+            class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-indigo-400 outline-none transition">
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-600 mb-2">💡 今日の学び</label>
+        <textarea id="learning" rows="2" placeholder="今日学んだこと・気づき" aria-label="今日の学び"
+          class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-indigo-400 outline-none transition resize-none"></textarea>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-600 mb-2">🎯 明日の最優先タスク</label>
+        <input id="tomorrow" type="text" placeholder="明日、必ず1つやること" aria-label="明日の最優先タスク"
+          class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-indigo-400 outline-none transition">
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-600 mb-2">🙏 今日の感謝</label>
+        <input id="gratitude" type="text" placeholder="今日感謝したこと・人" aria-label="今日の感謝"
+          class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-indigo-400 outline-none transition">
+      </div>
+
+      <div class="flex gap-3 pt-2">
+        <button onclick="saveReview()"
+          class="flex-1 bg-indigo-600 text-white py-2.5 rounded-xl font-medium hover:bg-indigo-700 transition text-sm">
+          保存する
+        </button>
+        <button onclick="exportMarkdown()"
+          class="px-4 bg-gray-100 text-gray-700 py-2.5 rounded-xl font-medium hover:bg-gray-200 transition text-sm">
+          月次エクスポート
+        </button>
+      </div>
+      <div id="save-msg" class="text-center text-sm text-green-600 hidden">✓ 保存しました</div>
+    </div>
+  </div>
+
+  <!-- 過去の記録 -->
+  <div id="pane-history" class="hidden fade-in">
+    <div class="bg-white rounded-2xl shadow-sm p-6">
+      <h2 class="font-semibold text-gray-700 mb-4">過去30日の記録</h2>
+      <div id="history-list" class="space-y-3"></div>
+      <p id="history-empty" class="text-center text-gray-400 text-sm py-8 hidden">まだ記録がありません</p>
+    </div>
+  </div>
+
+  <!-- パターン分析 -->
+  <div id="pane-pattern" class="hidden fade-in">
+    <div class="bg-white rounded-2xl shadow-sm p-6">
+      <h2 class="font-semibold text-gray-700 mb-4">繰り返しパターン分析</h2>
+      <div class="grid grid-cols-1 gap-6">
+        <div>
+          <h3 class="text-sm font-medium text-gray-500 mb-3">🏆 頻出Winキーワード</h3>
+          <div id="win-tags" class="min-h-[40px]"></div>
+        </div>
+        <div>
+          <h3 class="text-sm font-medium text-gray-500 mb-3">💡 頻出学びキーワード</h3>
+          <div id="learn-tags" class="min-h-[40px]"></div>
+        </div>
+        <div>
+          <h3 class="text-sm font-medium text-gray-500 mb-3">🎯 頻出優先タスクキーワード</h3>
+          <div id="tomorrow-tags" class="min-h-[40px]"></div>
+        </div>
+        <div>
+          <h3 class="text-sm font-medium text-gray-500 mb-3">🙏 頻出感謝キーワード</h3>
+          <div id="gratitude-tags" class="min-h-[40px]"></div>
+        </div>
+      </div>
+      <p id="pattern-empty" class="text-center text-gray-400 text-sm py-4 hidden">3日以上の記録が溜まると分析が始まります</p>
+    </div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'daily-review-v1';
+
+function htmlEscape(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function getToday() {
+  return new Date().toISOString().slice(0,10);
+}
+
+function loadAll() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch { return {}; }
+}
+
+function saveAll(data) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+function switchTab(name) {
+  ['today','history','pattern'].forEach(t => {
+    document.getElementById('pane-' + t).classList.toggle('hidden', t !== name);
+    const btn = document.getElementById('tab-' + t);
+    if (t === name) {
+      btn.classList.add('bg-white','text-indigo-700','shadow');
+      btn.classList.remove('text-gray-600');
+      btn.setAttribute('aria-selected','true');
+    } else {
+      btn.classList.remove('bg-white','text-indigo-700','shadow');
+      btn.classList.add('text-gray-600');
+      btn.setAttribute('aria-selected','false');
+    }
+  });
+  if (name === 'history') renderHistory();
+  if (name === 'pattern') renderPattern();
+}
+
+function saveReview() {
+  const wins = [
+    document.getElementById('win1').value.trim(),
+    document.getElementById('win2').value.trim(),
+    document.getElementById('win3').value.trim(),
+  ].filter(Boolean);
+  const learning = document.getElementById('learning').value.trim();
+  const tomorrow = document.getElementById('tomorrow').value.trim();
+  const gratitude = document.getElementById('gratitude').value.trim();
+
+  if (!wins.length && !learning && !tomorrow && !gratitude) return;
+
+  const data = loadAll();
+  data[getToday()] = { wins, learning, tomorrow, gratitude, ts: Date.now() };
+  saveAll(data);
+
+  const msg = document.getElementById('save-msg');
+  msg.classList.remove('hidden');
+  setTimeout(() => msg.classList.add('hidden'), 2000);
+}
+
+function renderHistory() {
+  const data = loadAll();
+  const keys = Object.keys(data).sort().reverse().slice(0, 30);
+  const list = document.getElementById('history-list');
+  const empty = document.getElementById('history-empty');
+  list.innerHTML = '';
+  if (!keys.length) { empty.classList.remove('hidden'); return; }
+  empty.classList.add('hidden');
+  keys.forEach(date => {
+    const r = data[date];
+    const div = document.createElement('div');
+    div.className = 'border border-gray-100 rounded-xl p-4 hover:bg-gray-50 transition';
+    div.innerHTML = `
+      <div class="flex items-center justify-between mb-2">
+        <span class="font-mono text-sm text-indigo-600">${htmlEscape(date)}</span>
+        <button onclick="deleteReview('${htmlEscape(date)}')" aria-label="削除" class="text-xs text-gray-300 hover:text-red-400 transition">削除</button>
+      </div>
+      ${r.wins && r.wins.length ? `<p class="text-xs text-gray-500 mb-1">🏆 ${r.wins.map(htmlEscape).join(' / ')}</p>` : ''}
+      ${r.learning ? `<p class="text-xs text-gray-500 mb-1">💡 ${htmlEscape(r.learning)}</p>` : ''}
+      ${r.tomorrow ? `<p class="text-xs text-gray-500 mb-1">🎯 ${htmlEscape(r.tomorrow)}</p>` : ''}
+      ${r.gratitude ? `<p class="text-xs text-gray-500">🙏 ${htmlEscape(r.gratitude)}</p>` : ''}
+    `;
+    list.appendChild(div);
+  });
+}
+
+function deleteReview(date) {
+  const data = loadAll();
+  delete data[date];
+  saveAll(data);
+  renderHistory();
+}
+
+function tokenize(text) {
+  return text.replace(/[、。！？\s,.!?]/g,' ').split(' ').map(s => s.trim()).filter(s => s.length >= 2);
+}
+
+function countWords(texts) {
+  const counts = {};
+  texts.forEach(t => tokenize(t).forEach(w => { counts[w] = (counts[w]||0)+1; }));
+  return Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,15);
+}
+
+function renderTags(elId, pairs) {
+  const el = document.getElementById(elId);
+  if (!pairs.length) { el.innerHTML = '<span class="text-xs text-gray-400">データなし</span>'; return; }
+  const colors = ['bg-indigo-100 text-indigo-700','bg-green-100 text-green-700','bg-amber-100 text-amber-700','bg-pink-100 text-pink-700'];
+  el.innerHTML = pairs.map(([w,c], i) =>
+    `<span class="tag ${colors[i%colors.length]}">${htmlEscape(w)} <strong>${c}</strong></span>`
+  ).join('');
+}
+
+function renderPattern() {
+  const data = loadAll();
+  const keys = Object.keys(data).sort().reverse().slice(0,30);
+  const empty = document.getElementById('pattern-empty');
+  if (keys.length < 3) { empty.classList.remove('hidden'); return; }
+  empty.classList.add('hidden');
+
+  const allWins = keys.flatMap(k => data[k].wins || []);
+  const allLearn = keys.map(k => data[k].learning || '');
+  const allTomorrow = keys.map(k => data[k].tomorrow || '');
+  const allGratitude = keys.map(k => data[k].gratitude || '');
+
+  renderTags('win-tags', countWords(allWins));
+  renderTags('learn-tags', countWords(allLearn));
+  renderTags('tomorrow-tags', countWords(allTomorrow));
+  renderTags('gratitude-tags', countWords(allGratitude));
+}
+
+function exportMarkdown() {
+  const data = loadAll();
+  const keys = Object.keys(data).sort().reverse();
+  const now = new Date();
+  const ym = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const monthKeys = keys.filter(k => k.startsWith(ym));
+  if (!monthKeys.length) { alert('今月の記録がありません'); return; }
+  let md = `# ${ym} 月次振り返りサマリー\n\n`;
+  monthKeys.forEach(date => {
+    const r = data[date];
+    md += `## ${date}\n`;
+    if (r.wins && r.wins.length) md += `\n**Win**\n${r.wins.map(w=>`- ${w}`).join('\n')}\n`;
+    if (r.learning) md += `\n**学び**\n${r.learning}\n`;
+    if (r.tomorrow) md += `\n**明日の最優先**\n${r.tomorrow}\n`;
+    if (r.gratitude) md += `\n**感謝**\n${r.gratitude}\n`;
+    md += '\n---\n\n';
+  });
+  const blob = new Blob([md], {type:'text/markdown'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `review-${ym}.md`;
+  a.click();
+}
+
+// 初期化
+document.getElementById('today-label').textContent = getToday();
+(function loadToday() {
+  const data = loadAll();
+  const r = data[getToday()];
+  if (!r) return;
+  if (r.wins) {
+    ['win1','win2','win3'].forEach((id,i) => {
+      if (r.wins[i]) document.getElementById(id).value = r.wins[i];
+    });
+  }
+  if (r.learning) document.getElementById('learning').value = r.learning;
+  if (r.tomorrow) document.getElementById('tomorrow').value = r.tomorrow;
+  if (r.gratitude) document.getElementById('gratitude').value = r.gratitude;
+})();
+</script>
+</body>
+</html>
